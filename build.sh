@@ -1,31 +1,48 @@
-#!/bin/bash
-if [[ $EUID -ne 0 ]]; then
+#!/bin/sh
+if [ $(id -u) -ne 0 ]; then
   echo "You must be a root user" 2>&1
   exit 1
 fi
-
-# make sure we have dependencies 
-hash mkisofs 2>/dev/null || { echo >&2 "ERROR: mkisofs not found.  Aborting."; exit 1; }
-hash transmission-cli 2>/dev/null || { echo >&2 "ERROR: transmission-cli not found. Install it by typing 'sudo apt-get install transmission-cli'. Aborting."; exit 1; }
-hash file-roller 2>/dev/null || { echo >&2 "ERROR: file-roller not found. Install it by typing 'sudo apt-get install file-roller'. Aborting."; exit 1; }
 
 set -o nounset
 set -o errexit
 #set -o xtrace
 
 # Configurations
-BOX="ubuntu-precise-64"
-BASE_NAME="ubuntu-12.04-alternate-amd64.iso"
-ISO_URL="http://releases.ubuntu.com/precise/$BASE_NAME.torrent"
-ISO_MD5="9fcc322536575dda5879c279f0b142d7"
+BOX="debian-squeeze-64"
+BASE_NAME="debian-6.0.5-amd64-netinst.iso"
+ISO_URL="http://cdimage.debian.org/debian-cd/current/amd64/bt-cd/$BASE_NAME.torrent"
+ISO_SHA512="d8c2e1f6b70892bb8b934344dc5728610307c0658629d24ac95be7c944064561897b2a1e929ad33148432abf2aeaedfcd58da5a0d027d3b96ff9a9af727711fc"
 
 # location, location, location
-FOLDER_BASE=`pwd`
+FOLDER_BASE=$(pwd)
 FOLDER_ISO="${FOLDER_BASE}/iso"
 FOLDER_BUILD="${FOLDER_BASE}/build"
 FOLDER_VBOX="${FOLDER_BUILD}/vbox"
 FOLDER_ISO_CUSTOM="${FOLDER_BUILD}/iso/custom"
 FOLDER_ISO_INITRD="${FOLDER_BUILD}/iso/initrd"
+
+ISO_FILENAME="${FOLDER_ISO}/${BASE_NAME}"
+INITRD_FILENAME="${FOLDER_ISO}/initrd.gz"
+ISO_GUESTADDITIONS="/usr/share/virtualbox/VBoxGuestAdditions.iso"
+
+# make sure we have dependencies 
+hash mkisofs 2>/dev/null || {
+	echo >&2 "ERROR: mkisofs not found. Install it by typing 'sudo aptitude install mkisofs'. Aborting."
+	exit 1
+}
+hash transmission-cli 2>/dev/null || {
+	echo >&2 "ERROR: transmission-cli not found. Install it by typing 'sudo aptitude install transmission-cli'. Aborting."
+	exit 1
+}
+hash file-roller 2>/dev/null || {
+	echo >&2 "ERROR: file-roller not found. Install it by typing 'sudo aptitude install file-roller'. Aborting."
+	exit 1
+}
+if [ ! -f $ISO_GUESTADDITIONS ]; then
+  echo "ERROR: VirtualBoxGuestAdditions.iso not found. Install it by typing 'sudo aptitude install virtualbox-guest-additions-iso'. Aborting."
+  exit 1
+fi
 
 # start with a clean slate
 if [ -d "${FOLDER_BUILD}" ]; then
@@ -42,26 +59,15 @@ mkdir -p "${FOLDER_VBOX}"
 mkdir -p "${FOLDER_ISO_CUSTOM}"
 mkdir -p "${FOLDER_ISO_INITRD}"
 
-ISO_FILENAME="${FOLDER_ISO}/${BASE_NAME}"
-INITRD_FILENAME="${FOLDER_ISO}/initrd.gz"
-ISO_GUESTADDITIONS="/usr/share/virtualbox/VBoxGuestAdditions.iso"
-
-# check if guest additions is in it's regular place (apparently not in 12.04 - I had to install it)
-if [ ! -f $ISO_GUESTADDITIONS ]; then
-  echo "ERROR: VirtualBoxGuestAdditions.iso file can't be found. 'sudo apt-get install virtualbox-guest-additions-iso'. Aborting.";
-  exit 1
-fi
-
 # download the installation disk if you haven't already or it is corrupted somehow
 if [ ! -e "${ISO_FILENAME}" ]; then
-  echo "Downloading `basename ${ISO_URL}` ..."
+  echo "Downloading $(basename ${ISO_URL}) ..."
   transmission-cli --download-dir "${FOLDER_ISO}" "${ISO_URL}"
 
   # make sure download is right...
-  ISO_HASH=`md5sum "${ISO_FILENAME}" | cut -d" " -f 1`
-  echo $ISO_HASH
-  if [ "${ISO_MD5}" != "${ISO_HASH}" ]; then
-    echo "ERROR: MD5 does not match. Got ${ISO_HASH} instead of ${ISO_MD5}. Aborting."
+  ISO_HASH=$(sha512sum "${ISO_FILENAME}" | cut -d" " -f 1)
+  if [ "${ISO_SHA512}" != "${ISO_HASH}" ]; then
+    echo "ERROR: SHA512 does not match. Got ${ISO_HASH} instead of ${ISO_SHA512}. Aborting."
     exit 1
   fi
 fi
@@ -70,27 +76,26 @@ fi
 echo "Creating Custom ISO"
 if [ ! -e "${FOLDER_ISO}/custom.iso" ]; then
 
-  echo "Untarring downloaded ISO ..."
-  #tar -C "${FOLDER_ISO_CUSTOM}" -xf "${ISO_FILENAME}"
+  echo "Unpacking downloaded ISO ..."
   file-roller -e "${FOLDER_ISO_CUSTOM}" "${ISO_FILENAME}"
 
   # backup initrd.gz
   echo "Backing up current init.rd ..."
-  chmod u+w "${FOLDER_ISO_CUSTOM}/install" "${FOLDER_ISO_CUSTOM}/install/initrd.gz"
-  mv "${FOLDER_ISO_CUSTOM}/install/initrd.gz" "${FOLDER_ISO_CUSTOM}/install/initrd.gz.org"
+  chmod u+w "${FOLDER_ISO_CUSTOM}/install.amd" "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz"
+  mv "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz" "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz.org"
 
   # stick in our new initrd.gz
   echo "Installing new initrd.gz ..."
   cd "${FOLDER_ISO_INITRD}"
-  gunzip -c "${FOLDER_ISO_CUSTOM}/install/initrd.gz.org" | cpio -id
+  gunzip -c "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz.org" | cpio -id
   cd "${FOLDER_BASE}"
   cp preseed.cfg "${FOLDER_ISO_INITRD}/preseed.cfg"
   cd "${FOLDER_ISO_INITRD}"
-  find . | cpio --create --format='newc' | gzip  > "${FOLDER_ISO_CUSTOM}/install/initrd.gz"
+  find . | cpio --create --format='newc' | gzip > "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz"
 
   # clean up permissions
   echo "Cleaning up Permissions ..."
-  chmod u-w "${FOLDER_ISO_CUSTOM}/install" "${FOLDER_ISO_CUSTOM}/install/initrd.gz" "${FOLDER_ISO_CUSTOM}/install/initrd.gz.org"
+  chmod u-w "${FOLDER_ISO_CUSTOM}/install.amd" "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz" "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz.org"
 
   # replace isolinux configuration
   echo "Replacing isolinux config ..."
@@ -106,7 +111,7 @@ if [ ! -e "${FOLDER_ISO}/custom.iso" ]; then
   cp "${FOLDER_BASE}/late_command.sh" "${FOLDER_ISO_CUSTOM}"
   
   echo "Running mkisofs ..."
-  mkisofs -r -V "Custom Ubuntu Install CD" \
+  mkisofs -r -V "Custom Debian Install CD" \
     -cache-inodes -quiet \
     -J -l -b isolinux/isolinux.bin \
     -c isolinux/boot.cat -no-emul-boot \
@@ -117,15 +122,15 @@ fi
 
 echo "Creating VM Box..."
 # create virtual machine
-if ! VBoxManage showvminfo "${BOX}" >/dev/null 2>/dev/null; then
+if ! VBoxManage showvminfo "${BOX}" >/dev/null 2>&1; then
   VBoxManage createvm \
     --name "${BOX}" \
-    --ostype Ubuntu_64 \
+    --ostype Debian_64 \
     --register \
     --basefolder "${FOLDER_VBOX}"
 
   VBoxManage modifyvm "${BOX}" \
-    --memory 360 \
+    --memory 256 \
     --boot1 dvd \
     --boot2 disk \
     --boot3 none \
@@ -156,7 +161,7 @@ if ! VBoxManage showvminfo "${BOX}" >/dev/null 2>/dev/null; then
 
   VBoxManage createhd \
     --filename "${FOLDER_VBOX}/${BOX}/${BOX}.vdi" \
-    --size 40960
+    --size 10240
 
   VBoxManage storageattach "${BOX}" \
     --storagectl "SATA Controller" \
@@ -189,7 +194,7 @@ if ! VBoxManage showvminfo "${BOX}" >/dev/null 2>/dev/null; then
   VBoxManage startvm "${BOX}"
 
   # get private key
-  curl --output "${FOLDER_BUILD}/id_rsa" "https://raw.github.com/mitchellh/vagrant/master/keys/vagrant"
+  wget -O "${FOLDER_BUILD}/id_rsa" "https://raw.github.com/mitchellh/vagrant/master/keys/vagrant"
   chmod 600 "${FOLDER_BUILD}/id_rsa"
 
   # install virtualbox guest additions
@@ -214,7 +219,7 @@ if ! VBoxManage showvminfo "${BOX}" >/dev/null 2>/dev/null; then
 fi
 
 echo "Building Vagrant Box ..."
-vagrant package --base "${BOX}"
+vagrant package --base "${BOX}" && mv "package.box" "${BOX}.box"
 
 # references:
 # http://blog.ericwhite.ca/articles/2009/11/unattended-debian-lenny-install/

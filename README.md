@@ -2,18 +2,26 @@
 
 This script has been ported to Ubuntu 12.04. It will: 
 
- 1. download the Ubuntu 12.04 alternate server (torrent), 64bit iso
+ 1. download the Debian 6.0 64bit iso via bittorrent
  2. ... do some magic to turn it into a vagrant box file
- 3. output package.box 
+ 3. output package.box
 
 ## Usage
 
     $ sudo ./build.sh
 
-This should do everything you need. If you don't have you must 
-have `transmission-cli` installed `sudo apt-get install transmission-cli`
-if not. Likewise, `file-roller` (which should be installed by default with
-Ubuntu-Desktop, otherwise `sudo apt-get install file-roller` then:
+This should do everything you need. You will need to install the following
+packages, if they are not already installed:
+
+* vagrant
+* virtualbox-guest-additions-iso
+* virtualbox
+* transmission-cli
+* mkisofs
+* file-roller
+
+If any of those are missing, add them (the script will guide you, too):
+`sudo aptitude install [package1] [package2] [...]`.
 
 ### Kev's notes
 

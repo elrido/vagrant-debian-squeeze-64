@@ -1,7 +1,6 @@
 build/
 test/
 iso/
-
+.project
 .DS_Store
-
 *.box

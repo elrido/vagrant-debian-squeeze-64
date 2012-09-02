@@ -1,6 +1,6 @@
 Vagrant::Config.run do |config|
   # Setup the box
-  config.vm.box = "ubuntu-precise-64"
+  config.vm.box = "debian-squeeze-64"
 
   # Enable the Puppet provisioner
   config.vm.provision :puppet
@@ -16,7 +16,7 @@ Vagrant::Config.run do |config|
   end
 
   # Some NFS testing
-  config.vm.share_folder("v-root", "/vagrant", ".", :nfs => true)
+  #config.vm.share_folder("v-root", "/vagrant", ".", :nfs => true)
 
   # Static host-only IP
   config.vm.network :hostonly, "10.0.73.57"
