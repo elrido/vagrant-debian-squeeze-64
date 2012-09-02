@@ -1,9 +1,4 @@
 #!/bin/sh
-if [ $(id -u) -ne 0 ]; then
-  echo "You must be a root user" 2>&1
-  exit 1
-fi
-
 set -o nounset
 set -o errexit
 #set -o xtrace
@@ -75,8 +70,11 @@ fi
 # customize it
 echo "Creating Custom ISO"
 if [ ! -e "${FOLDER_ISO}/custom.iso" ]; then
+  ID_USER=$(id -u)
+  ID_GROUP=$(id -g)
 
   echo "Unpacking downloaded ISO ..."
+  sudo su <<EOC
   file-roller -e "${FOLDER_ISO_CUSTOM}" "${ISO_FILENAME}"
 
   # backup initrd.gz
@@ -92,6 +90,8 @@ if [ ! -e "${FOLDER_ISO}/custom.iso" ]; then
   cp preseed.cfg "${FOLDER_ISO_INITRD}/preseed.cfg"
   cd "${FOLDER_ISO_INITRD}"
   find . | cpio --create --format='newc' | gzip > "${FOLDER_ISO_CUSTOM}/install.amd/initrd.gz"
+  cd "${FOLDER_BASE}"
+  rm -r "${FOLDER_ISO_INITRD}"
 
   # clean up permissions
   echo "Cleaning up Permissions ..."
@@ -99,9 +99,7 @@ if [ ! -e "${FOLDER_ISO}/custom.iso" ]; then
 
   # replace isolinux configuration
   echo "Replacing isolinux config ..."
-  cd "${FOLDER_BASE}"
   chmod u+w "${FOLDER_ISO_CUSTOM}/isolinux" "${FOLDER_ISO_CUSTOM}/isolinux/isolinux.cfg"
-  rm "${FOLDER_ISO_CUSTOM}/isolinux/isolinux.cfg"
   cp isolinux.cfg "${FOLDER_ISO_CUSTOM}/isolinux/isolinux.cfg"  
   chmod u+w "${FOLDER_ISO_CUSTOM}/isolinux/isolinux.bin"
 
@@ -117,6 +115,11 @@ if [ ! -e "${FOLDER_ISO}/custom.iso" ]; then
     -c isolinux/boot.cat -no-emul-boot \
     -boot-load-size 4 -boot-info-table \
     -o "${FOLDER_ISO}/custom.iso" "${FOLDER_ISO_CUSTOM}"
+
+  # cleanup
+  rm -r "${FOLDER_ISO_CUSTOM}"
+  chown ${ID_USER}:${ID_GROUP} "${FOLDER_ISO}/custom.iso"
+EOC
 
 fi
 
@@ -198,6 +201,10 @@ if ! VBoxManage showvminfo "${BOX}" >/dev/null 2>&1; then
   chmod 600 "${FOLDER_BUILD}/id_rsa"
 
   # install virtualbox guest additions
+  echo -n "Waiting for machine to boot up "
+  sleep 20
+  echo -n "."
+  echo "Installing VirtualBox guest additions ..."
   ssh -i "${FOLDER_BUILD}/id_rsa" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -p 2222 vagrant@127.0.0.1 "sudo mount /dev/cdrom /media/cdrom; sudo sh /media/cdrom/VBoxLinuxAdditions.run; sudo umount /media/cdrom; sudo shutdown -h now"
   echo -n "Waiting for machine to shut off "
   while VBoxManage list runningvms | grep "${BOX}" >/dev/null; do
@@ -220,6 +227,9 @@ fi
 
 echo "Building Vagrant Box ..."
 vagrant package --base "${BOX}" && mv "package.box" "${BOX}.box"
+
+# clean up build vm
+VBoxManage unregistervm "${BOX}" --delete
 
 # references:
 # http://blog.ericwhite.ca/articles/2009/11/unattended-debian-lenny-install/

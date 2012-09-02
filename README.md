@@ -2,16 +2,16 @@
 
 This script has been ported to Ubuntu 12.04. It will: 
 
- 1. download the Debian 6.0 64bit iso via bittorrent
+ 1. download the Debian 6.0 64bit iso via torrent
  2. ... do some magic to turn it into a vagrant box file
  3. output package.box
 
 ## Usage
 
-    $ sudo ./build.sh
+    $ ./build.sh
 
-This should do everything you need. You will need to install the following
-packages, if they are not already installed:
+This should do everything you need. You will need sudo permissions at one point
+and have the following packages installed, if they aren't already:
 
 * vagrant
 * virtualbox-guest-additions-iso
@@ -22,6 +22,28 @@ packages, if they are not already installed:
 
 If any of those are missing, add them (the script will guide you, too):
 `sudo aptitude install [package1] [package2] [...]`.
+
+### Localization
+
+The default image built will have en_US language, but Swiss German keyboard and
+UTC as time zone. To change this to your locale, edit the file `preseed.cfg`
+before running the script. You could also add some packages to preinstall.
+Interesting options might be:
+
+* debian-installer/country (country, ex. `US`)
+* console-keymaps-at/keymap (keymap, ex. `us`)
+* keyboard-configuration/xkb-keymap (keymap, ex. `us`)
+* time/zone (time zone, ex. `Europe/Zurich`)
+* pkgsel/include (packages to include, ex. `cowsay fortune-mod sl`)
+
+### Simon's notes
+
+Changed the script to output a Debian Squeeze box instead. Also changed it, to
+be more portable (runs with dash now, instead of bash) and to only use sudo
+where not otherwise possible. Changed the preseed to default to Switzerland.
+Chef is now installed from the official opscode repos as packages, which should
+make them easier to maintain. The script now cleans up at the end. It does not
+delete the custom iso, in case you want to use it for other unattended installs.
 
 ### Kev's notes
 

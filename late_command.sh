@@ -32,6 +32,8 @@ update-grub
 # clean up
 apt-get -y autoremove
 apt-get clean
+# fill the empty space with zeros
+# takes quite long but results in much smaller vagrant box (ca. 300 vs 440 MiB)
 sync
 dd if=/dev/zero of=/zero bs=1M
 rm -f /zero
